@@ -1,53 +1,41 @@
 import 'dart:io';
 import 'package:carbon_icons/carbon_icons.dart';
-import 'package:diary_app/domain/entities/event.dart';
+import 'package:diary_app/data/temp_categories.dart';
+import 'package:diary_app/data/temp_chats.dart';
+import 'package:diary_app/domain/cubit/chat/chat_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
-class EventPage extends StatefulWidget {
+import '../../domain/entities/event.dart';
+
+class ChatPage extends StatefulWidget {
   final String title;
-  const EventPage({
+  final int chatId;
+  const ChatPage({
     super.key,
     required this.title,
+    required this.chatId,
   });
 
   @override
-  State<EventPage> createState() => _EventPageState();
+  State<ChatPage> createState() => _ChatPageState();
 }
 
-class _EventPageState extends State<EventPage> {
-  final _events = [
-    Event(
-      isMessage: false,
-      dateTime: DateTime.now(),
-      message: 'Today',
-    )..isFavorite = true,
-    Event(
-      isMessage: true,
-      dateTime: DateTime.now(),
-      message:
-          'Event 1 ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-    ),
-    Event(
-      isMessage: true,
-      dateTime: DateTime.now(),
-      message: 'Event 2',
-    ),
-    Event(
-      isMessage: true,
-      dateTime: DateTime.now(),
-      message: 'Event 3',
-    ),
-  ]; // Mocked data
-
+class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
+  final _searchController = TextEditingController();
+
   var _isEditing = false;
   var _isSelectionMode = false;
   var _isMessageEditMode = false;
   var _isBookmarkMode = false;
+  var _isSearchMode = false;
+
   var _messageIndex = 0;
+  var _chosenCategory = null;
 
   @override
   Widget build(BuildContext context) {
@@ -68,39 +56,105 @@ class _EventPageState extends State<EventPage> {
           ? IconButton(
               splashRadius: 20,
               icon: const Icon(CarbonIcons.close),
-              onPressed: () {
-                _turnOffSelectionMode();
-              },
+              onPressed: () => _turnOffSelectionMode(),
             )
           : IconButton(
               splashRadius: 20,
               icon: const Icon(CarbonIcons.arrow_left),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
-      title: Text(
-        widget.title,
-        style: const TextStyle(
-          fontWeight: FontWeight.normal,
-        ),
-      ),
+      title: _isSearchMode
+          ? _searchField()
+          : Text(
+              widget.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.normal,
+              ),
+            ),
       actions: _appbarActions(),
     );
   }
 
-  List<Widget> _appbarActions() =>
-      _isSelectionMode ? _selectionModeActions() : _defaultModeActions();
+  List<Widget> _appbarActions() => _isSearchMode
+      ? _searchModeActions()
+      : _isSelectionMode
+          ? _selectionModeActions()
+          : _defaultModeActions();
+
+  List<Widget> _searchModeActions() {
+    return [
+      IconButton(
+        splashRadius: 20,
+        icon: const Icon(CarbonIcons.close),
+        onPressed: () {
+          setState(() {
+            _isSearchMode = false;
+            BlocProvider.of<ChatCubit>(context).unmarkSearchResults();
+            _searchController.clear();
+          });
+        },
+      ),
+    ];
+  }
+
+  Widget _searchField() => Focus(
+        onFocusChange: (value) {
+          setState(() {
+            _isEditing = value;
+            _chosenCategory = null;
+          });
+        },
+        child: TextField(
+          controller: _searchController,
+          style: const TextStyle(
+            color: Colors.black,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.all(10),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Colors.transparent,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Colors.transparent,
+              ),
+            ),
+            border: InputBorder.none,
+            filled: true,
+            fillColor: Colors.grey.shade200,
+          ),
+          onChanged: (value) {
+            BlocProvider.of<ChatCubit>(context).getSearchResult(value);
+          },
+        ),
+      );
 
   List<Widget> _selectionModeActions() {
     return [
       IconButton(
         splashRadius: 20,
+        icon: const Icon(CarbonIcons.arrow_down_left),
+        onPressed: () async {
+          final targetChatId = await showDialog(
+            context: context,
+            builder: (context) => _migrateDialog(),
+          ) as int?;
+          if (!mounted || targetChatId == null) return;
+
+          BlocProvider.of<ChatCubit>(context).moveSelectedItems(targetChatId);
+          _turnOffSelectionMode();
+        },
+      ),
+      IconButton(
+        splashRadius: 20,
         icon: const Icon(CarbonIcons.delete),
         onPressed: () {
-          setState(() {
-            _events.removeWhere((element) => element.isSelected);
-          });
+          BlocProvider.of<ChatCubit>(context).removeSelectedItems();
           _turnOffSelectionMode();
         },
       ),
@@ -110,25 +164,46 @@ class _EventPageState extends State<EventPage> {
             ? const Icon(CarbonIcons.favorite_half)
             : const Icon(CarbonIcons.favorite),
         onPressed: () {
-          setState(() {
-            if (_isBookmarkMode) {
-              for (var e in _events) {
-                if (e.isSelected) {
-                  e.isFavorite = false;
-                }
-              }
-            } else {
-              for (var e in _events) {
-                if (e.isSelected) {
-                  e.isFavorite = true;
-                }
-              }
-            }
-          });
+          if (_isBookmarkMode) {
+            BlocProvider.of<ChatCubit>(context).changeFavoriteness(false);
+          } else {
+            BlocProvider.of<ChatCubit>(context).changeFavoriteness(true);
+          }
+
           _turnOffSelectionMode();
         },
       ),
     ];
+  }
+
+  AlertDialog _migrateDialog() {
+    return AlertDialog(
+      title: const Text('Choose where to migrate'),
+      content: SizedBox(
+        width: 200,
+        height: 200,
+        child: Column(
+          children: [
+            ListView.builder(
+                shrinkWrap: true,
+                itemCount: chats.length,
+                itemBuilder: (context, index) {
+                  final chat = chats[index];
+                  if (chat.chatId != widget.chatId) {
+                    return ListTile(
+                      title: Text(chat.title),
+                      onTap: () {
+                        Navigator.of(context).pop(chat.chatId);
+                      },
+                    );
+                  } else {
+                    return Container();
+                  }
+                }),
+          ],
+        ),
+      ),
+    );
   }
 
   List<Widget> _defaultModeActions() {
@@ -136,16 +211,18 @@ class _EventPageState extends State<EventPage> {
       IconButton(
         splashRadius: 20,
         icon: const Icon(CarbonIcons.search),
-        onPressed: () {},
+        onPressed: () {
+          setState(() {
+            _isSearchMode = true;
+          });
+        },
       ),
       IconButton(
         splashRadius: 20,
         icon: _isBookmarkMode
             ? const Icon(CarbonIcons.bookmark_filled)
             : const Icon(CarbonIcons.bookmark),
-        onPressed: () => setState(() {
-          _isBookmarkMode = !_isBookmarkMode;
-        }),
+        onPressed: () => setState(() => _isBookmarkMode = !_isBookmarkMode),
       ),
     ];
   }
@@ -153,17 +230,23 @@ class _EventPageState extends State<EventPage> {
   void _turnOffSelectionMode() {
     setState(() {
       _isSelectionMode = false;
-      for (var e in _events) {
-        e.isSelected = false;
-      }
     });
+    BlocProvider.of<ChatCubit>(context).removeSelections();
   }
 
   Widget _body() {
     return Column(
       children: [
         Flexible(
-          child: _eventsList(),
+          child: BlocBuilder<ChatCubit, ChatState>(
+            builder: (context, state) {
+              if (state is ChatEventsUpdated) {
+                return _eventsList();
+              } else {
+                return Container();
+              }
+            },
+          ),
         ),
         _messagePanel(),
       ],
@@ -173,9 +256,7 @@ class _EventPageState extends State<EventPage> {
   Widget _textField() {
     return Focus(
       onFocusChange: (value) {
-        setState(() {
-          _isEditing = value;
-        });
+        setState(() => _isEditing = value);
       },
       child: TextField(
         controller: _controller,
@@ -212,10 +293,17 @@ class _EventPageState extends State<EventPage> {
           IconButton(
             splashRadius: 20,
             icon: const Icon(
-              CarbonIcons.microphone,
+              CarbonIcons.ai_status,
               size: 30,
             ),
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: _categoriesPicker(),
+                  duration: const Duration(days: 1),
+                ),
+              );
+            },
             color: Colors.teal,
           ),
           Expanded(
@@ -230,17 +318,55 @@ class _EventPageState extends State<EventPage> {
                     size: 30,
                   ),
                   color: Colors.teal,
-                  onPressed: () {
-                    _showImageDialog();
-                  },
+                  onPressed: () => _showImageDialog(),
                 ),
         ],
       ),
     );
   }
 
-  Widget _sendButtonVariants() =>
-      _isMessageEditMode ? _editButton() : _sendButton();
+  Widget _categoriesPicker() {
+    return SizedBox(
+      height: 70,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              shrinkWrap: true,
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final category = categories[index];
+                return TextButton(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Text(category.title),
+                      Icon(
+                        category.icon,
+                        color: category.title == 'Close' ? Colors.red : Colors.teal,
+                        size: 30,
+                      ),
+                    ],
+                  ),
+                  onPressed: () {
+                    if (category.title == 'Close') {
+                      ScaffoldMessenger.of(context).clearSnackBars();
+                    }
+                    _chosenCategory = category;
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sendButtonVariants() => _isMessageEditMode ? _editButton() : _sendButton();
 
   Widget _editButton() {
     return IconButton(
@@ -252,15 +378,19 @@ class _EventPageState extends State<EventPage> {
       color: Colors.teal,
       onPressed: () {
         if (_controller.text.isEmpty) return;
-        setState(() {
-          _events[_messageIndex] = Event(
+        BlocProvider.of<ChatCubit>(context).editEvent(
+          _messageIndex,
+          Event(
+            _chosenCategory,
             isMessage: true,
             dateTime: DateTime.now(),
             message: _controller.text.toString(),
-          );
-        });
+          ),
+        );
+
         _controller.clear();
         setState(() {
+          _chosenCategory = null;
           _isMessageEditMode = false;
           _messageIndex = 0;
         });
@@ -278,14 +408,16 @@ class _EventPageState extends State<EventPage> {
       color: Colors.teal,
       onPressed: () {
         if (_controller.text.isEmpty) return;
+        BlocProvider.of<ChatCubit>(context).addEvent(
+          Event(
+            _chosenCategory,
+            isMessage: true,
+            dateTime: DateTime.now(),
+            message: _controller.text.toString(),
+          ),
+        );
         setState(() {
-          _events.add(
-            Event(
-              isMessage: true,
-              dateTime: DateTime.now(),
-              message: _controller.text.toString(),
-            ),
-          );
+          _chosenCategory = null;
         });
         _controller.clear();
       },
@@ -348,60 +480,64 @@ class _EventPageState extends State<EventPage> {
 
   void _createEventWithPicture(XFile? pickedFile) {
     if (pickedFile != null) {
-      setState(() {
-        _events.add(
-          Event(
-            isMessage: true,
-            dateTime: DateTime.now(),
-            message: "",
-            image: Image.file(
-              File(pickedFile.path),
-            ),
+      BlocProvider.of<ChatCubit>(context).addEvent(
+        Event(
+          _chosenCategory,
+          isMessage: true,
+          dateTime: DateTime.now(),
+          message: "",
+          image: Image.file(
+            File(pickedFile.path),
           ),
-        );
-      });
+        ),
+      );
     }
   }
 
-  Widget _eventsList() => _events.isEmpty ? _intro() : _eventsViews();
+  Widget _eventsList() => BlocProvider.of<ChatCubit>(context).isEmpty ? _intro() : _eventsViews();
 
   Widget _intro() {
     return Center(
-      child: Flexible(
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.lime.shade200,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This is the page where You can track'
-                '\neverything about "Travel"!',
-                style: TextStyle(fontSize: 20),
-                textAlign: TextAlign.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.lime.shade200,
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(
-                height: 10,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 20,
               ),
-              Text(
-                'Add first event to "Travel" page by\n'
-                'entering the text in the text box below\n'
-                'and tapping send button',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 18,
-                ),
-                textAlign: TextAlign.justify,
-              )
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'This is the page where You can track'
+                    '\neverything about the topic!',
+                    style: TextStyle(fontSize: 20),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(
+                    height: 10,
+                  ),
+                  Text(
+                    'Add first event to this page by\n'
+                    'entering the text in the text box below\n'
+                    'and tapping send button',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 18,
+                    ),
+                    textAlign: TextAlign.justify,
+                  )
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -416,39 +552,62 @@ class _EventPageState extends State<EventPage> {
   }
 
   Widget _bookmarkedEvents() {
-    return Flexible(
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 10),
-        reverse: true,
-        shrinkWrap: true,
-        itemCount: _events.length,
-        itemBuilder: (context, index) {
-          // Display events in reverse order
-          return _events[_events.length - 1 - index].isFavorite
-              ? _eventListItem(
-                  _events[_events.length - 1 - index],
-                  _events.length - 1 - index,
-                )
-              : Container();
-        },
-      ),
+    return BlocBuilder<ChatCubit, ChatState>(
+      builder: (context, state) {
+        if (state is ChatEventsUpdated) {
+          final events = state.chatEvents;
+
+          return Flexible(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 10),
+              reverse: true,
+              shrinkWrap: true,
+              itemCount: events.length,
+              itemBuilder: (context, index) {
+                // Display events in reverse order
+                return events[events.length - 1 - index].isFavorite &&
+                        events[events.length - 1 - index].isDisplayed
+                    ? _eventListItem(
+                        events[events.length - 1 - index],
+                        events.length - 1 - index,
+                      )
+                    : Container();
+              },
+            ),
+          );
+        } else {
+          return Container();
+        }
+      },
     );
   }
 
   Widget _allEvents() {
-    return Flexible(
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 10),
-        reverse: true,
-        shrinkWrap: true,
-        itemCount: _events.length,
-        itemBuilder: (context, index) {
-          return _eventListItem(
-            _events[_events.length - 1 - index],
-            _events.length - 1 - index,
+    return BlocBuilder<ChatCubit, ChatState>(
+      builder: (context, state) {
+        if (state is ChatEventsUpdated) {
+          final events = state.chatEvents;
+
+          return Flexible(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 10),
+              reverse: true,
+              shrinkWrap: true,
+              itemCount: events.length,
+              itemBuilder: (context, index) {
+                return events[events.length - 1 - index].isDisplayed
+                    ? _eventListItem(
+                        events[events.length - 1 - index],
+                        events.length - 1 - index,
+                      )
+                    : Container();
+              },
+            ),
           );
-        },
-      ),
+        } else {
+          return Container();
+        }
+      },
     );
   }
 
@@ -503,15 +662,15 @@ class _EventPageState extends State<EventPage> {
           setState(() {
             if (!_isSelectionMode) {
               _isSelectionMode = true;
-              _events[eventIndex].isSelected = !_events[eventIndex].isSelected;
+              BlocProvider.of<ChatCubit>(context).unmarkSearchResults();
+              _isSearchMode = false;
+              BlocProvider.of<ChatCubit>(context).changeSelectionState(eventIndex);
             }
           });
         },
         onTap: () async {
           if (_isSelectionMode) {
-            setState(() {
-              _events[eventIndex].isSelected = !_events[eventIndex].isSelected;
-            });
+            BlocProvider.of<ChatCubit>(context).changeSelectionState(eventIndex);
           }
         },
         child: _pictureEventContent(event, timeMark),
@@ -566,15 +725,15 @@ class _EventPageState extends State<EventPage> {
           setState(() {
             if (!_isSelectionMode) {
               _isSelectionMode = true;
-              _events[eventIndex].isSelected = !_events[eventIndex].isSelected;
+              BlocProvider.of<ChatCubit>(context).unmarkSearchResults();
+              _isSearchMode = false;
+              BlocProvider.of<ChatCubit>(context).changeSelectionState(eventIndex);
             }
           });
         },
         onTap: () async {
           if (_isSelectionMode) {
-            setState(() {
-              _events[eventIndex].isSelected = !_events[eventIndex].isSelected;
-            });
+            BlocProvider.of<ChatCubit>(context).changeSelectionState(eventIndex);
           } else {
             await Clipboard.setData(
               ClipboardData(
@@ -592,12 +751,15 @@ class _EventPageState extends State<EventPage> {
             }
           }
         },
-        onHorizontalDragEnd: (_) {
+        onVerticalDragEnd: (_) {
           setState(() {
             _isMessageEditMode = true;
             _messageIndex = eventIndex;
           });
           _controller.text = event.message;
+        },
+        onHorizontalDragEnd: (_) {
+          BlocProvider.of<ChatCubit>(context).removeItemById(eventIndex);
         },
         child: _messageEventBody(event, timeMark),
       ),

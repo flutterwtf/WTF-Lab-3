@@ -1,7 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
-import 'package:flutter/material.dart';
-
 import 'package:diary_app/themes.dart';
+import 'package:flutter/material.dart';
 
 class _CustomTheme extends InheritedWidget {
   // ignore: overridden_fields, annotate_overrides
@@ -33,10 +32,7 @@ class CustomTheme extends StatefulWidget {
   State<CustomTheme> createState() => _CustomThemeState();
 
   static ThemeData of(BuildContext context) {
-    return context
-        .dependOnInheritedWidgetOfExactType<_CustomTheme>()!
-        .data
-        ._theme;
+    return context.dependOnInheritedWidgetOfExactType<_CustomTheme>()!.data._theme;
   }
 
   static void changeTheme(BuildContext context) {
@@ -51,10 +47,7 @@ class CustomTheme extends StatefulWidget {
       changedTo = MyThemesKeys.dark;
     }
 
-    context
-        .dependOnInheritedWidgetOfExactType<_CustomTheme>()!
-        .data
-        .changeTheme(changedTo);
+    context.dependOnInheritedWidgetOfExactType<_CustomTheme>()!.data.changeTheme(changedTo);
   }
 }
 
@@ -64,9 +57,7 @@ class _CustomThemeState extends State<CustomTheme> {
   @override
   void initState() {
     super.initState();
-    setState(() {
-      _theme = MyThemes.getTheme(widget.initialThemeKey);
-    });
+    setState(() => _theme = MyThemes.getTheme(widget.initialThemeKey));
   }
 
   void changeTheme(MyThemesKeys themesKey) => setState(() {

@@ -1,4 +1,4 @@
-import 'package:diary_app/themes.dart';
+import 'themes.dart';
 import 'package:flutter/material.dart';
 
 import 'custom_theme.dart';
@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: CustomTheme.of(context),
       title: 'Diary app',
-      home: const MainScreen(),
+      home: MainScreen(),
     );
   }
 }

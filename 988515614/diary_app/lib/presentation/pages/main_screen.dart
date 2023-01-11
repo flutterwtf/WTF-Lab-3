@@ -1,4 +1,7 @@
-import 'package:diary_app/custom_theme.dart';
+import 'package:diary_app/domain/cubit/chat_list/chat_list_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../custom_theme.dart';
 
 import 'home_page.dart';
 import 'package:flutter/cupertino.dart';
@@ -6,10 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
 class MainScreen extends HookWidget {
-  const MainScreen({super.key});
+  MainScreen({super.key});
   static const _tabNames = ['Home', 'Daily', 'Timeline', 'Explore'];
-  final _pages = const [
-    HomePage(), // Home
+  final _pages = [
+    BlocProvider(
+      create: (context) => ChatListCubit(),
+      child: const HomePage(),
+    ), // Home
     Text('2nd'), // Daily
     Text('3rd'), // Timeline
     Text('4th'), // Explore
@@ -30,8 +36,7 @@ class MainScreen extends HookWidget {
     );
   }
 
-  Widget _bottomNavBar(
-      ValueNotifier<int> currentIndex, ValueNotifier<String> currentTab) {
+  Widget _bottomNavBar(ValueNotifier<int> currentIndex, ValueNotifier<String> currentTab) {
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
       currentIndex: currentIndex.value,
@@ -66,11 +71,9 @@ class MainScreen extends HookWidget {
     );
   }
 
-  Widget _body(ValueNotifier<int> currentIndex) =>
-      _pages.elementAt(currentIndex.value);
+  Widget _body(ValueNotifier<int> currentIndex) => _pages.elementAt(currentIndex.value);
 
-  PreferredSizeWidget _appBar(
-      BuildContext context, ValueNotifier<String> currentTab) {
+  PreferredSizeWidget _appBar(BuildContext context, ValueNotifier<String> currentTab) {
     return AppBar(
       elevation: 0,
       centerTitle: true,
@@ -89,9 +92,7 @@ class MainScreen extends HookWidget {
         IconButton(
           splashRadius: 20,
           icon: const Icon(CupertinoIcons.drop_fill),
-          onPressed: () {
-            CustomTheme.changeTheme(context);
-          },
+          onPressed: () => CustomTheme.changeTheme(context),
         ),
       ],
     );

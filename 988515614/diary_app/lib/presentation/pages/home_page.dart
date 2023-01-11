@@ -1,5 +1,8 @@
 import 'package:carbon_icons/carbon_icons.dart';
-import 'package:diary_app/presentation/pages/create_chat.dart';
+import 'package:diary_app/domain/cubit/chat/chat_cubit.dart';
+import 'package:diary_app/domain/cubit/chat_list/chat_list_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'create_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
@@ -7,7 +10,7 @@ import 'package:intl/intl.dart';
 import '../../custom_theme.dart';
 import '../../domain/entities/chat.dart';
 import '../widgets/question_button.dart';
-import 'event_page.dart';
+import 'chat_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,48 +21,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isVisible = true;
-
-  final List<Chat> _tempChats = [
-    Chat(
-        icon: CarbonIcons.departure,
-        title: 'Travel',
-        createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.pedestrian_family,
-        title: 'Family',
-        createdAt: DateTime.now()),
-    Chat(icon: CarbonIcons.trophy, title: 'Sports', createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.game_console,
-        title: 'Chill',
-        createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.workspace,
-        title: 'Projects',
-        createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.navaid_civil,
-        title: 'Goals',
-        createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.face_activated_add,
-        title: 'Mood',
-        createdAt: DateTime.now()),
-    Chat(icon: CarbonIcons.satellite, title: 'Work', createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.gas_station,
-        title: 'Mechanics',
-        createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.keyboard,
-        title: 'Programming',
-        createdAt: DateTime.now()),
-    Chat(icon: CarbonIcons.watson, title: 'Ideas', createdAt: DateTime.now()),
-    Chat(
-        icon: CarbonIcons.quadrant_plot,
-        title: 'Stats',
-        createdAt: DateTime.now()),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -83,15 +44,11 @@ class _HomePageState extends State<HomePage> {
               final ScrollDirection direction = notification.direction;
               if (direction == ScrollDirection.reverse) {
                 if (_isVisible == true) {
-                  setState(() {
-                    _isVisible = false;
-                  });
+                  setState(() => _isVisible = false);
                 }
               } else if (direction == ScrollDirection.forward) {
                 if (_isVisible == false) {
-                  setState(() {
-                    _isVisible = true;
-                  });
+                  setState(() => _isVisible = true);
                 }
               }
               return true;
@@ -104,39 +61,53 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _chats() {
-    return ListView.separated(
-      itemCount: _tempChats.length,
-      itemBuilder: (context, index) {
-        final chatData = _tempChats[index];
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: TextButton(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.all(0),
-            ),
-            onLongPress: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (_) => _bottomSheet(index),
+    return BlocBuilder<ChatListCubit, ChatListState>(
+      builder: (context, state) {
+        if (state is ChatListChanged) {
+          final chats = state.chats;
+
+          return ListView.separated(
+            itemCount: chats.length,
+            itemBuilder: (context, index) {
+              final chatData = chats[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.all(0),
+                  ),
+                  onLongPress: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (_) => _bottomSheet(index, BlocProvider.of<ChatListCubit>(context)),
+                    );
+                  },
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) {
+                        return BlocProvider(
+                          create: (context) => ChatCubit(chatData.chatId),
+                          child: ChatPage(
+                            title: chatData.title,
+                            chatId: chatData.chatId,
+                          ),
+                        );
+                      }),
+                    );
+                  },
+                  child: _chatContent(chatData),
+                ),
               );
             },
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) {
-                  return EventPage(
-                    title: _tempChats[index].title,
-                  );
-                }),
+            separatorBuilder: (context, index) {
+              return const Divider(
+                color: Colors.black,
               );
             },
-            child: _chatContent(chatData),
-          ),
-        );
-      },
-      separatorBuilder: (context, index) {
-        return const Divider(
-          color: Colors.black,
-        );
+          );
+        } else {
+          return Container();
+        }
       },
     );
   }
@@ -150,17 +121,15 @@ class _HomePageState extends State<HomePage> {
       title: Text(
         chatData.title + (chatData.isPinned ? ' 📌' : ''),
         style: TextStyle(
-          color: CustomTheme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : Colors.black,
+          color:
+              CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
         ),
       ),
       subtitle: Text(
         chatData.lastMessage ?? 'No events. Click to create one',
         style: TextStyle(
-          color: CustomTheme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : Colors.black,
+          color:
+              CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
         ),
       ),
       trailing: Text(
@@ -168,51 +137,61 @@ class _HomePageState extends State<HomePage> {
             ? DateFormat('hh:mm a').format(chatData.updatedAt!).toString()
             : '',
         style: TextStyle(
-          color: CustomTheme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : Colors.black,
+          color:
+              CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
         ),
       ),
     );
   }
 
-  Widget _bottomSheet(int index) {
+  Widget _bottomSheet(int index, ChatListCubit bloc) {
     return Wrap(
       children: [
-        _infoButton(index),
-        _pinUnpinButton(index),
-        _archiveButton(index),
-        _editButton(index),
-        _deleteButton(index),
+        _infoButton(index, bloc),
+        _pinUnpinButton(index, bloc),
+        _archiveButton(index, bloc),
+        _editButton(index, bloc),
+        _deleteButton(index, bloc),
       ],
     );
   }
 
-  Widget _infoButton(int index) {
-    return TextButton(
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.all(0),
-      ),
-      onPressed: () {
-        var chat = _tempChats[index];
-        Navigator.of(context).pop();
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return _dialog(chat);
-          },
-        );
-      },
-      child: ListTile(
-        leading: const Icon(CarbonIcons.information),
-        title: Text(
-          'Info',
-          style: TextStyle(
-            color: CustomTheme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black,
-          ),
-        ),
+  Widget _infoButton(int index, ChatListCubit bloc) {
+    return BlocProvider.value(
+      value: bloc,
+      child: BlocBuilder<ChatListCubit, ChatListState>(
+        builder: (context, state) {
+          if (state is ChatListChanged) {
+            return TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.all(0),
+              ),
+              onPressed: () {
+                final chat = state.chats[index];
+                Navigator.of(context).pop();
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return _dialog(chat);
+                  },
+                );
+              },
+              child: ListTile(
+                leading: const Icon(CarbonIcons.information),
+                title: Text(
+                  'Info',
+                  style: TextStyle(
+                    color: CustomTheme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                  ),
+                ),
+              ),
+            );
+          } else {
+            return Container();
+          }
+        },
       ),
     );
   }
@@ -272,26 +251,13 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _pinUnpinButton(int index) {
+  Widget _pinUnpinButton(int index, ChatListCubit bloc) {
     return TextButton(
       style: TextButton.styleFrom(
         padding: const EdgeInsets.all(0),
       ),
       onPressed: () {
-        if (_tempChats[index].isPinned) {
-          setState(() {
-            _tempChats[index].isPinned = false;
-          });
-          Navigator.of(context).pop();
-          return;
-        }
-        var lastPinnedIndex =
-            _tempChats.lastIndexWhere((element) => element.isPinned);
-        setState(() {
-          var chat = _tempChats.removeAt(index);
-          chat.isPinned = true;
-          _tempChats.insert(lastPinnedIndex + 1, chat);
-        });
+        bloc.pinUnpinChat(index); //! HERE
         Navigator.of(context).pop();
       },
       child: ListTile(
@@ -302,23 +268,20 @@ class _HomePageState extends State<HomePage> {
         title: Text(
           'Pin/Unpin Chat',
           style: TextStyle(
-            color: CustomTheme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black,
+            color:
+                CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
           ),
         ),
       ),
     );
   }
 
-  Widget _archiveButton(int index) {
+  Widget _archiveButton(int index, ChatListCubit bloc) {
     return TextButton(
       style: TextButton.styleFrom(
         padding: const EdgeInsets.all(0),
       ),
-      onPressed: () {
-        Navigator.of(context).pop();
-      },
+      onPressed: () => Navigator.of(context).pop(),
       child: ListTile(
         leading: const Icon(
           CarbonIcons.save,
@@ -327,35 +290,32 @@ class _HomePageState extends State<HomePage> {
         title: Text(
           'Archive Chat',
           style: TextStyle(
-            color: CustomTheme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black,
+            color:
+                CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
           ),
         ),
       ),
     );
   }
 
-  Widget _editButton(int index) {
+  Widget _editButton(int index, ChatListCubit bloc) {
     return TextButton(
       style: TextButton.styleFrom(
         padding: const EdgeInsets.all(0),
       ),
       onPressed: () async {
+        final chatData = bloc.getChatData(index);
+
         Chat? result = await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => const CreateChat(
+            builder: (_) => CreateChat(
+                  prevChatIcon: chatData.icon,
+                  prevChatName: chatData.title,
                   title: 'Edit chat',
                 ))) as Chat?;
 
-        setState(() {
-          if (result != null) {
-            _tempChats[index].icon = result.icon;
-            _tempChats[index].title = result.title;
-          }
-        });
-
         if (!mounted) return;
 
+        bloc.editChat(result, index); //! HERE
         Navigator.of(context).pop();
       },
       child: ListTile(
@@ -366,24 +326,21 @@ class _HomePageState extends State<HomePage> {
         title: Text(
           'Edit Chat',
           style: TextStyle(
-            color: CustomTheme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black,
+            color:
+                CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
           ),
         ),
       ),
     );
   }
 
-  Widget _deleteButton(int index) {
+  Widget _deleteButton(int index, ChatListCubit bloc) {
     return TextButton(
       style: TextButton.styleFrom(
         padding: const EdgeInsets.all(0),
       ),
       onPressed: () {
-        setState(() {
-          _tempChats.removeAt(index);
-        });
+        bloc.removeChat(index);
         Navigator.of(context).pop();
       },
       child: ListTile(
@@ -394,9 +351,8 @@ class _HomePageState extends State<HomePage> {
         title: Text(
           'Delete Chat',
           style: TextStyle(
-            color: CustomTheme.of(context).brightness == Brightness.dark
-                ? Colors.white
-                : Colors.black,
+            color:
+                CustomTheme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
           ),
         ),
       ),
@@ -415,16 +371,13 @@ class _HomePageState extends State<HomePage> {
         onPressed: () async {
           Chat? result = await Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => const CreateChat(
+                    prevChatIcon: Icons.abc,
+                    prevChatName: '',
                     title: 'Create new chat',
                   ))) as Chat?;
 
-          setState(() {
-            if (result != null) {
-              var lastPinnedIndex =
-                  _tempChats.lastIndexWhere((element) => element.isPinned);
-              _tempChats.insert(lastPinnedIndex + 1, result);
-            }
-          });
+          if (!mounted) return;
+          BlocProvider.of<ChatListCubit>(context).addChat(result);
         },
         child: const Icon(
           Icons.add,

@@ -2,15 +2,21 @@
 import 'package:flutter/material.dart';
 
 import 'package:diary_app/custom_theme.dart';
+import 'package:diary_app/data/temp_chat_events.dart';
+import 'package:diary_app/data/temp_icons.dart';
 import 'package:diary_app/domain/entities/chat.dart';
-import 'package:diary_app/domain/entities/icon.dart';
+import 'package:diary_app/domain/entities/chat_icon.dart';
 
 class CreateChat extends StatefulWidget {
   final String title;
+  final String prevChatName;
+  final IconData prevChatIcon;
 
   const CreateChat({
     Key? key,
     required this.title,
+    required this.prevChatName,
+    required this.prevChatIcon,
   }) : super(key: key);
 
   @override
@@ -19,12 +25,22 @@ class CreateChat extends StatefulWidget {
 
 class _CreateChatState extends State<CreateChat> {
   final _controller = TextEditingController();
-  final _iconTiles = [
-    ChatIcon(iconData: Icons.abc, isSelected: true),
-    ChatIcon(iconData: Icons.hail, isSelected: false),
-    ChatIcon(iconData: Icons.dangerous_outlined, isSelected: false),
-    ChatIcon(iconData: Icons.label_important, isSelected: false),
-  ];
+  final _iconTiles = List.from(icons).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = widget.prevChatName;
+    final iconIndex = _iconTiles.indexWhere((element) => element.iconData == widget.prevChatIcon);
+    _deselectAll();
+    _iconTiles[iconIndex].isSelected = true;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,10 +69,10 @@ class _CreateChatState extends State<CreateChat> {
       backgroundColor: Colors.yellow.shade700,
       onPressed: () {
         if (_controller.text.isEmpty) {
-          showWarning();
+          _showWarning();
           return;
         }
-        Navigator.of(context).pop(getNewChatData());
+        Navigator.of(context).pop(_getNewChatData());
       },
       child: const Icon(
         Icons.done,
@@ -66,11 +82,15 @@ class _CreateChatState extends State<CreateChat> {
     );
   }
 
-  Chat getNewChatData() {
-    var icon = _iconTiles.where((element) => element.isSelected).first.iconData;
-    var title = _controller.text.toString();
+  Chat _getNewChatData() {
+    final icon = _iconTiles.where((element) => element.isSelected).first.iconData;
+    final title = _controller.text.toString();
+    final chatId = UniqueKey().hashCode;
 
-    var newChat = Chat(
+    chatEvents[chatId] = [];
+
+    final newChat = Chat(
+      chatId: chatId,
       icon: icon,
       title: title,
       createdAt: DateTime.now(),
@@ -79,7 +99,7 @@ class _CreateChatState extends State<CreateChat> {
     return newChat;
   }
 
-  void showWarning() {
+  void _showWarning() {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -182,10 +202,7 @@ class _CreateChatState extends State<CreateChat> {
         width: 30,
         height: 30,
         child: Icon(iconData,
-            size: 50,
-            color: isSelected
-                ? Colors.amber
-                : CustomTheme.of(context).primaryColorLight),
+            size: 50, color: isSelected ? Colors.amber : CustomTheme.of(context).primaryColorLight),
       ),
     );
   }

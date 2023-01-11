@@ -31,8 +31,10 @@ environment:
 dependencies:
   carbon_icons: ^0.0.1+2
   cupertino_icons: ^1.0.2
+  equatable: ^2.0.5
   flutter:
     sdk: flutter
+  flutter_bloc: ^8.1.1
   flutter_hooks: ^0.18.5+1
   image_picker: ^0.8.6
   intl: ^0.18.0

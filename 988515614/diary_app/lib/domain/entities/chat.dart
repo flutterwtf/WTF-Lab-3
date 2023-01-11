@@ -2,16 +2,18 @@
 import 'package:flutter/material.dart';
 
 class Chat {
+  final DateTime createdAt;
+  final int chatId;
   IconData icon;
   String title;
-  final DateTime createdAt;
   String? lastMessage;
   DateTime? updatedAt;
-  bool isPinned = false;
+  bool isPinned;
 
   Chat({
+    required this.chatId,
     required this.icon,
     required this.title,
     required this.createdAt,
-  });
+  }) : isPinned = false;
 }
